@@ -46,3 +46,24 @@ mutation UpdateUserPassword ($id:Int!, $password:String){
   }
 }
 `;
+
+export const findUserById = `
+query GetUserById($userId:Int!) {
+  users_by_pk(id:$userId){
+    id
+    name
+    surname
+    family 
+    roleType{
+      value
+      description
+    }
+    secondRoleType{
+      value
+      description
+    }
+    voted
+    eVoted
+  }
+}
+`;

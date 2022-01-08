@@ -6,6 +6,7 @@ import { Controller } from '../interfaces/controller.interface';
 import { User } from '../interfaces/user.interface';
 import {
   findUser,
+  findUserById,
   loginRequest,
   updateUserPassword,
 } from '../queries/UserQueries';
@@ -47,10 +48,11 @@ class AuthController implements Controller {
 
         if (req.baseUrl === '/auth') {
           switch (req.url) {
+            //  case '/token': // TODO COMMENT WHEN FINISH
             case '/register':
-            case '/token': // TODO COMMENT WHEN FINISH
             case '/login':
-            case '/getAccessToken':
+            case '/refresh':
+              //  case '/getAccessToken':
               console.log('NEXT....');
               return next();
               break;
@@ -71,6 +73,7 @@ class AuthController implements Controller {
     //  this.router.post('/getAccessToken', this.getAccessToken);
     this.router.post('/register', this.register); // role: anonymous
     this.router.post('/login', this.login); // role: anonymous
+    this.router.post('/refresh', this.refresh); // forwarded JWT
     // this.router.post('/vote', this.login);
     // this.router.post('/login', this.login);
     // this.router.post('/send-reset-password-email', this.sendResetPasswordEmail);
@@ -196,7 +199,12 @@ class AuthController implements Controller {
       return 'changed';
     });
   };
-
+  /**
+   * Login function.
+   * @param req
+   * @param res
+   * @returns
+   */
   private login = async (req: any, res: Response) => {
     console.log('THE NEXT IS LOGIN');
     if (req.body.input === undefined) {
@@ -209,31 +217,6 @@ class AuthController implements Controller {
     const userLoginArgs = req.body.input?.args;
     console.log(req.body.input);
 
-    // const variables: ChangePasswordInput = {
-    //   token,
-    //   password: hash,
-    //   email,
-    // };
-
-    // const config: AxiosRequestConfig = {
-    //   url,
-    //   method: 'post',
-    //   headers: {
-    //     'x-hasura-admin-secret': adminPassword,
-    //   },
-    //   data: {
-    //     query,
-    //     variables,
-    //   },
-    // };
-
-    // try {
-    //   console.log('login: ', req.token);
-    //   this.validateToken(req.token);
-    // } catch (error) {
-    //   res.send(403);
-    //   //return;
-    // }
     const query = loginRequest;
     const adminPassword: string = process.env.HASURA_ADMIN_PASSWORD as string;
     const url: string = process.env.HASURA_URL as string;
@@ -280,20 +263,76 @@ class AuthController implements Controller {
       .catch(err => console.warn(err));
   };
 
-  private getSignedToken(isAccessToken: boolean, user: User): string {
-    const baseRole = user.roleType.value;
-    const allowedRoles = [baseRole];
+  private refresh = async (req: any, res: Response) => {
+    console.log('THE NEXT IS refresh token');
+    if (req.body.input === undefined) {
+      return res.status(200).json({
+        fetchToken: null,
+      });
+    }
+
+    const switchRoleInputArguments = req.body.input?.args;
+    const query = findUserById;
+    const adminPassword: string = process.env.HASURA_ADMIN_PASSWORD as string;
+    const url: string = process.env.HASURA_URL as string;
+    axios({
+      method: 'post',
+      url,
+      data: {
+        query: query,
+        variables: { userId: switchRoleInputArguments.userId },
+      },
+      headers: {
+        'x-hasura-admin-secret': adminPassword,
+      },
+    })
+      .then(({ data }) => {
+        console.log('LOGIN RESPONSE: ');
+        console.log(data);
+        console.log(data.data.users_by_pk);
+
+        if (data.errors) {
+          return res.status(400).json(data);
+        }
+        const user = data.data.users_by_pk;
+        if (user) {
+          const roleIndex: number = switchRoleInputArguments.roleIndex;
+          console.log(roleIndex);
+          const fetchToken = this.getSignedToken(false, user, roleIndex);
+          return res.status(200).json({
+            fetchToken,
+          });
+        } else {
+          return res.status(200).json({
+            fetchToken: null,
+          });
+        }
+      })
+      .catch(err => console.warn(err));
+  };
+
+  private getSignedToken(
+    isAccessToken: boolean,
+    user: User,
+    roleIndex = 0
+  ): string {
+    let defaultRoleForToken = user.roleType.value;
+    if (roleIndex === 1) {
+      defaultRoleForToken = user.secondRoleType.value;
+    }
+
+    const allowedRoles = [user.roleType.value];
     if (user.secondRoleType) {
       allowedRoles.push(user.secondRoleType.value);
     }
     const token = jwt.sign(
       {
         sub: isAccessToken ? 'access' : 'fetch',
-        role: baseRole,
+        role: defaultRoleForToken,
         iat: parseInt('' + moment().valueOf() / 1000), //1516239022,
         'https://hasura.io/jwt/claims': {
           'x-hasura-allowed-roles': allowedRoles,
-          'x-hasura-default-role': baseRole,
+          'x-hasura-default-role': defaultRoleForToken, // Permissions in this role will be used to retrieve data
           'x-hasura-user-id': user.id.toString(),
           'x-hasura-org-id': 'unknown',
           'x-hasura-custom': 'custom-value',
@@ -307,46 +346,6 @@ class AuthController implements Controller {
     );
     return token;
   }
-
-  private getAccessToken = (req: Request, res: Response): void => {
-    console.log('Get access token');
-    // res.status(200).json({
-    //   token: 'BRADA',
-    // });
-    const q = loginRequest;
-    // console.log(q);
-
-    const adminPassword: string = process.env.HASURA_ADMIN_PASSWORD as string;
-    const url: string = process.env.HASURA_URL as string;
-    axios({
-      method: 'post',
-      url,
-      data: {
-        query: q,
-        variables: { egn: '8080808080', password: 'pepe' },
-        opeartionName: 'Login',
-      },
-      headers: {
-        'x-hasura-admin-secret': adminPassword,
-      },
-    })
-      .then(({ data }) => {
-        console.log(data.data.users);
-        if (data.errors || data.data.users?.length === 0) {
-          return res.status(400).json(data);
-        }
-        const user = data.data.users[0];
-        // console.log(data);
-        return res.status(200).json({
-          code: 0,
-          message: 'hi',
-
-          userId: user.id, // data.data.users,
-          accessToken: 'alabala',
-        });
-      })
-      .catch(err => console.warn(err));
-  };
 
   // private resetPassword = (req: Request, res: Response): void => {
   //   const { email, password, token }: ChangePasswordInput = req.body.input.args;
@@ -478,9 +477,9 @@ class AuthController implements Controller {
   //       .then(({ data }) => {
   //         const mailer = new Mailer();
   //         const config: Options = {
-  //           from: 'Invoicer Mail Robot 🤖 <no-replay@espi-mse.com>', // sender address
+  //           from: 'Espi Mail Robot 🤖 <no-replay@espi-mse.com>', // sender address
   //           to: email, // list of receivers
-  //           // cc: "test-ww5344jm4@srv1.mail-tester.com",
+  //           // cc: "asdf",
   //           subject: 'Заявка за смяна на парола 🧾', // Subject line
   //           text: `Здравейте, Заявили сте смяна на паролата. Можете да кликнете на линка, или да го копирате и да го поставите в адресната лента на броузера Ви.
   //            Ако не сте заявявали Вие смяна на паролата, не е нужно да предприемате други действия.
@@ -492,7 +491,7 @@ class AuthController implements Controller {
   //           <a href='${siteUrl}/auth/reset-password?email=${email}&token=${data.data.insert_password_reset_requests_one.token}' target='_blank'>
   //             ${siteUrl}/auth/reset-password?email=${email}&token=${data.data.insert_password_reset_requests_one.token}
   //           </a>
-  //           <br><hr style='color: #a6a6a6'><br>Поздрави, <br>екипът на <a href='https://espi-mse.com' target='_blank'>Invoicer</a>`, // html body
+  //           <br><hr style='color: #a6a6a6'><br>Поздрави, <br>екипът на <a href='https://espi-mse.com' target='_blank'>ESPI</a>`, // html body
   //         };
 
   //         mailer
@@ -512,26 +511,6 @@ class AuthController implements Controller {
   //   });
   // };
 
-  // private getUserByEmail(
-  //   email: string
-  // ): AxiosPromise<Record<string, Record<string, User[]>>> {
-  //   const url: string = process.env.HASURA_URL as string;
-  //   const adminPassword: string = process.env.HASURA_ADMIN_PASSWORD as string;
-  //   const query = getUserByEmail;
-
-  //   return axios({
-  //     method: 'post',
-  //     url,
-  //     data: {
-  //       query,
-  //       variables: { email },
-  //     },
-  //     headers: {
-  //       'x-hasura-admin-secret': adminPassword,
-  //     },
-  //   });
-  // }
-
   private hasToken(req: any, res: Response, next: () => void) {
     // middleware
     // next(); // Uncomment this to get token
@@ -542,7 +521,8 @@ class AuthController implements Controller {
       const bearer = bearerHeader.split(' ');
       const bearerToken = bearer[1];
       try {
-        this.validateToken(bearerToken);
+        console.log(bearerToken);
+        validateToken(bearerToken);
         req.token = bearerToken;
         console.log('TOKEN IS VALID....');
         next();
@@ -569,59 +549,23 @@ class AuthController implements Controller {
       // res.send(403);
     }
   }
-
-  private validateToken(token: any) {
-    if (token) {
-      jwt.verify(token, process.env.SIGN, (jwtError: any, jwtResponse: any) => {
-        if (jwtError) {
-          console.log(jwtError);
-          throw Error('undefined');
-        } else {
-          console.log('VALID TOKEN');
-          console.log(jwtResponse);
-          console.log(json(jwtResponse));
-        }
-      });
-    } else {
-      throw Error('undefined');
-    }
-  }
-
-  // private isThisAnonymousCall(url: any): boolean {
-  //   console.log('CHECK REQUWST', url);
-  //   // console.log(req.baseUrl);
-  //   // console.log(req.url);
-  //   //if(this.an)
-  //   return true;
-  // }
-
-  private anony = async (url: any) => {
-    return true;
-  };
 }
-// function hasToken(req: any, res: Response, next: () => void) {
-//   // middleware
-//   // next(); // Uncomment this to get token
-//   console.log(' has token');
 
-//   const bearerHeader = req.headers['authorization'];
-//   if (bearerHeader !== undefined) {
-//     const bearer = bearerHeader.split(' ');
-//     const bearerToken = bearer[1];
-//     req.token = bearerToken;
-//     next();
-//   } else {
-//     console.log('NO TOKEN');
-//     if (isThisAnonymousCall(req)) {
-//       next();
-//     } else {
-//       res.status(403).json({
-//         status: 'Error',
-//         message: `Missing JWT: from path ${req.baseUrl}`,
-//       });
-//     }
-//     // res.send(403);
-//   }
-// }
+function validateToken(token: any) {
+  if (token) {
+    jwt.verify(token, process.env.SIGN, (jwtError: any, jwtResponse: any) => {
+      if (jwtError) {
+        console.log(jwtError);
+        throw Error('undefined');
+      } else {
+        console.log('VALID TOKEN');
+        console.log(jwtResponse);
+        console.log(json(jwtResponse));
+      }
+    });
+  } else {
+    throw Error('undefined');
+  }
+}
 
 export default AuthController;
