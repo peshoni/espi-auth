@@ -1,7 +1,7 @@
 import * as dotenv from 'dotenv';
-import App from './app';
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
+import App from './app';
 import { Controller } from './interfaces/controller.interface';
 
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
