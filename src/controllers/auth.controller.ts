@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { json, NextFunction, Request, Response, Router } from 'express';
+import { NextFunction, Request, Response, Router } from 'express';
 import jwt from 'jsonwebtoken';
 import moment from 'moment';
 import { Controller } from '../interfaces/controller.interface';
@@ -94,14 +94,6 @@ class AuthController implements Controller {
     const query = findUser;
     const adminPassword: string = process.env.HASURA_ADMIN_PASSWORD as string;
     const url: string = process.env.HASURA_URL as string;
-    // console.log(adminPassword);
-    // console.log(url);
-    // console.log(req.body);
-    // const { username, password } = req.body.input;
-    // // let user: User;
-
-    // console.log(username, password);
-    //SELECT * FROM users u WHERE u."egn" = '8080808080' AND u."password" = crypt('pepe', u."password");
 
     axios({
       method: 'post',
@@ -120,18 +112,12 @@ class AuthController implements Controller {
       },
     })
       .then(({ data }) => {
-        console.log('-+-------------------------------');
-        console.log(data);
-        console.log(data.data.users);
         if (data.errors /*|| data.data.users?.length === 0*/) {
           return res.status(400).json(data);
         }
         const userFromDb = data.data.users[0];
-        console.log('1111+-------------------------------');
-        console.log(userFromDb);
         const found = data.data.users.length > 0;
         if (found === true) {
-          console.log('set password: ' + userInputArgs.password);
           this.changPass(userFromDb.id, userInputArgs.password).then(
             response => {
               console.log(response);
@@ -139,7 +125,6 @@ class AuthController implements Controller {
             }
           );
         } else {
-          // return res.status(200).json({ found: data.data.users.length > 0 });
           return res.status(200).json({ found });
         }
       })
@@ -329,7 +314,7 @@ class AuthController implements Controller {
       {
         sub: isAccessToken ? 'access' : 'fetch',
         role: defaultRoleForToken,
-        iat: parseInt('' + moment().valueOf() / 1000), //1516239022,
+        iat: parseInt('' + moment().valueOf() / 1000),
         'https://hasura.io/jwt/claims': {
           'x-hasura-allowed-roles': allowedRoles,
           'x-hasura-default-role': defaultRoleForToken, // Permissions in this role will be used to retrieve data
@@ -341,7 +326,7 @@ class AuthController implements Controller {
       },
       process.env.SIGN,
       {
-        expiresIn: 60 * 60 * 1000, // 1H  1620162000000,
+        expiresIn: '15m',
       }
     );
     return token;
@@ -398,51 +383,6 @@ class AuthController implements Controller {
   //       });
   //   });
   // };
-
-  // private updatePasswordInDB(config: AxiosRequestConfig): AxiosPromise {
-  //   return axios(config);
-  // }
-
-  // private signTokken(user: User, refresh = false): SignedToken {
-  //   const now = moment().unix();
-  //   const expires = refresh
-  //     ? moment().add(1, 'month').unix()
-  //     : moment().add(5, 'minutes').unix();
-
-  //   const customClaims: CustomClaims = {
-  //     active: user.active,
-  //     'x-hasura-allowed-roles': ['user', 'cashier', 'manager', 'nap', 'admin'],
-  //     'x-hasura-company-id': user.companyId,
-  //     'x-hasura-default-role': user.role,
-  //     'x-hasura-user-id': user.id,
-  //   };
-
-  //   customClaims[
-  //     user.role as 'admin' | 'cashier' | 'manager' | 'nap' | 'user'
-  //   ] = true;
-
-  //   const data: Token = {
-  //     admin: user.role === 'admin',
-  //     aud: process.env.SITE_URL,
-  //     auth_time: now,
-  //     email: user.email,
-  //     exp: expires,
-  //     'https://hasura.io/jwt/claims': customClaims,
-  //     iat: now,
-  //     iss: 'self',
-  //     name: [
-  //       user.firstName,
-  //       user.middleName ? user.middleName.charAt(0) + '.' : '',
-  //       user.lastName,
-  //     ].join(' '),
-  //     sub: user.id,
-  //     user_id: user.id,
-  //   };
-
-  //   const secret = process.env.TOKEN_SECRET;
-  //   const token = jwt.sign(data, secret);
-  //   return { token, expires };
-  // }
 
   // private sendResetPasswordEmail = (req: Request, res: Response): void => {
   //   const email = req.body.input.email;
@@ -512,8 +452,6 @@ class AuthController implements Controller {
   // };
 
   private hasToken(req: any, res: Response, next: () => void) {
-    // middleware
-    // next(); // Uncomment this to get token
     console.log(' has token');
 
     const bearerHeader = req.headers['authorization'];
@@ -524,7 +462,6 @@ class AuthController implements Controller {
         console.log(bearerToken);
         validateToken(bearerToken);
         req.token = bearerToken;
-        console.log('TOKEN IS VALID....');
         next();
       } catch (error) {
         console.log(error);
@@ -559,8 +496,6 @@ function validateToken(token: any) {
         throw Error('undefined');
       } else {
         console.log('VALID TOKEN');
-        console.log(jwtResponse);
-        console.log(json(jwtResponse));
       }
     });
   } else {
