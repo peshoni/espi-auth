@@ -9,7 +9,7 @@ class App {
   private app: Application;
 
   constructor(controllers: Controller[], port: number) {
-    console.log(process.env.TOKEN_SECRET);
+    //console.log(process.env.TOKEN_SECRET);
     if (!process.env.TOKEN_SECRET) {
       throw new Error('Missing critical configurations!');
     }
