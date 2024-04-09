@@ -15,6 +15,7 @@ query Login($egn: String!,  $password: String) {
     }
     voted
     eVoted
+    votingSectionId
   } 
 } 
 `;

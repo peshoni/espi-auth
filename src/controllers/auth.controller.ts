@@ -326,7 +326,7 @@ class AuthController implements Controller {
       },
       process.env.SIGN,
       {
-        expiresIn: '15m',
+        expiresIn: isAccessToken ? '1Y' : '15m',
       }
     );
     return token;
@@ -459,7 +459,7 @@ class AuthController implements Controller {
       const bearer = bearerHeader.split(' ');
       const bearerToken = bearer[1];
       try {
-        console.log(bearerToken);
+        //console.log(bearerToken);
         validateToken(bearerToken);
         req.token = bearerToken;
         next();
